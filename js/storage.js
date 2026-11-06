@@ -1,8 +1,7 @@
 // 以 IndexedDB 儲存資料夾（每個資料夾 = 一套字體）
 // Folder 結構：
 // { id, name, createdAt, updatedAt,
-//   glyphs: { A: dataURL, B: dataURL, ... },   // 已確認的字形（黑字透明底 PNG）
-//   pending: [ { id, image } ] }               // 尚未辨識出字母的切割片段
+//   glyphs: { A: dataURL, B: dataURL, ... } }  // 已確認的字形（黑字透明底 PNG）
 
 const DB_NAME = 'font-anytime';
 const STORE = 'folders';
@@ -67,7 +66,6 @@ export async function createFolder(name) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     glyphs: {},
-    pending: [],
   };
   await saveFolder(folder);
   return folder;

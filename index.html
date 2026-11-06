@@ -1,48 +1,49 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="orange">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#efe6d2" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#2a2520" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#141414" />
   <meta name="description" content="Font Anytime：用手機拍下手寫的 A-Z，自動切割辨識，做成可以安裝使用的字型檔。" />
   <title>Font Anytime</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23222'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23f6f1e7' font-family='Georgia,serif' font-style='italic'%3EAa%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23141414'/%3E%3Crect x='34' y='34' width='22' height='22' rx='6' fill='%23ff5b14'/%3E%3Ctext x='24' y='40' font-size='30' font-weight='800' text-anchor='middle' fill='%23fff' font-family='Arial,sans-serif'%3EA%3C/text%3E%3C/svg%3E" />
+  <script>
+    // 在畫面出現前套用主題色，避免閃一下
+    try {
+      var t = localStorage.getItem('fa-theme');
+      if (t === 'orange' || t === 'blue') document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Huninn&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js" defer></script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <!-- 紙張手撕邊緣用的 SVG 濾鏡 -->
-  <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
-    <defs>
-      <filter id="torn" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.035 0.05" numOctaves="4" seed="3" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
-      </filter>
-      <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="3" seed="7" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
-      </filter>
-    </defs>
-  </svg>
-
   <!-- 首頁：資料夾列表 -->
-  <section id="view-home" class="view" hidden>
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">Aa</span>
-        <div>
-          <h1>Font Anytime</h1>
-          <p class="tagline">用筆和相機，隨時做出自己的字型</p>
+  <section id="view-home" class="view view-home" hidden>
+    <header class="hero">
+      <div class="hero-top">
+        <span class="logo" aria-hidden="true">A<i></i></span>
+        <div class="theme-switch" role="group" aria-label="主題色">
+          <button type="button" data-theme-option="orange" aria-pressed="true"><i class="swatch swatch-orange"></i>橘黑</button>
+          <button type="button" data-theme-option="blue" aria-pressed="false"><i class="swatch swatch-blue"></i>黃藍</button>
         </div>
+      </div>
+      <h1>Font<br />Anytime<span class="dot">.</span></h1>
+      <p class="tagline">拍下手寫的 A–Z，做成你自己的字型</p>
+      <div class="hero-tiles" aria-hidden="true">
+        <span>A</span><span>B</span><span>C</span>
       </div>
     </header>
     <main class="home-main">
-      <button id="btn-new-folder" class="btn btn-primary btn-block">＋ 新增資料夾</button>
+      <button id="btn-new-folder" class="btn btn-primary btn-block btn-lg">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+        新增資料夾
+      </button>
+      <h2 class="section-title">我的字型</h2>
       <ul id="folder-list" class="folder-list"></ul>
       <div id="home-empty" class="empty" hidden>
         <p class="empty-title">還沒有任何資料夾</p>
@@ -51,69 +52,71 @@
     </main>
   </section>
 
-  <!-- 資料夾頁：上方相機、下方字母偵測狀態 -->
-  <section id="view-folder" class="view" hidden>
-    <header class="topbar topbar-folder">
-      <button id="btn-back" class="icon-btn" aria-label="返回">
-        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="folder-title">
-        <h2 id="folder-name"></h2>
-        <p id="folder-progress" class="muted"></p>
-      </div>
-      <button id="btn-export" class="btn btn-primary btn-sm">輸出字型</button>
-    </header>
+  <!-- 資料夾頁：上方相機固定、下方字母可捲動 -->
+  <section id="view-folder" class="view view-folder" hidden>
+    <div class="top-block">
+      <header class="appbar">
+        <button id="btn-back" class="icon-btn" aria-label="返回">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="folder-title">
+          <h2 id="folder-name"></h2>
+          <p id="folder-progress"></p>
+        </div>
+        <button id="btn-export" class="btn btn-primary btn-sm">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          輸出字型
+        </button>
+      </header>
 
-    <div class="camera-wrap">
-      <div class="photo-frame">
-      <span class="tape tape-l" aria-hidden="true"></span>
-      <span class="tape tape-r" aria-hidden="true"></span>
-      <div class="camera" id="camera">
-        <video id="video" playsinline muted autoplay></video>
-        <canvas id="snapshot" hidden></canvas>
-        <div class="camera-guide" id="camera-guide">請在白紙上用深色筆寫<strong>大寫</strong>字母，字和字之間留一點空隙</div>
-        <div class="camera-msg" id="camera-msg" hidden></div>
-        <div class="camera-status" id="camera-status" hidden></div>
-      </div>
-      </div>
-      <div class="camera-actions">
-        <label class="btn btn-ghost btn-sm" for="file-input">從相簿選擇</label>
-        <input id="file-input" type="file" accept="image/*" hidden />
-        <button id="btn-shutter" class="shutter" aria-label="拍照"><span></span></button>
-        <button id="btn-preview" class="btn btn-ghost btn-sm">預覽字型</button>
+      <div class="camera-panel">
+        <div class="camera" id="camera">
+          <video id="video" playsinline muted autoplay></video>
+          <canvas id="snapshot" hidden></canvas>
+          <div class="camera-guide" id="camera-guide">在白紙上用深色筆寫<strong>大寫</strong>字母，上下左右都要留空隙</div>
+          <div class="camera-msg" id="camera-msg" hidden></div>
+          <div class="camera-status" id="camera-status" hidden></div>
+        </div>
+        <div class="camera-actions">
+          <label class="tool-btn" for="file-input">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="M4.5 17l5-5 4 4 2.5-2.5 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            <span>相簿</span>
+          </label>
+          <input id="file-input" type="file" accept="image/*" hidden />
+          <button id="btn-shutter" class="shutter" aria-label="拍照"><span></span></button>
+          <button id="btn-preview" class="tool-btn" type="button">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 19L9.5 5h1L16 19M6.2 14h7.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 11.5h3.5V19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <span>預覽</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <main class="folder-main">
-      <section id="pending-section" class="pending" hidden>
-        <div class="section-head">
-          <h3>未辨識的字 <span class="muted" id="pending-count"></span></h3>
-          <button id="btn-clear-pending" class="link-btn">全部清除</button>
-        </div>
-        <p class="muted small">點一下圖片，手動指定它是哪個字母</p>
-        <div id="pending-list" class="pending-list"></div>
-      </section>
-
-      <section>
-        <div class="section-head">
-          <h3>字母偵測狀態</h3>
-          <span class="legend"><i class="dot dot-done"></i>已建立 <i class="dot dot-empty"></i>尚未建立</span>
-        </div>
-        <div id="glyph-grid" class="glyph-grid"></div>
-      </section>
-    </main>
+    <div class="folder-scroll" id="folder-scroll">
+      <div class="progress-card">
+        <div class="progress-num"><strong id="progress-count">0</strong><span>/ 26</span></div>
+        <p id="progress-hint"></p>
+        <div class="progress"><i id="progress-fill"></i></div>
+      </div>
+      <div class="section-head">
+        <h3>字母偵測狀態</h3>
+        <span class="legend"><i class="dot dot-done"></i>已建立<i class="dot dot-empty"></i>尚未建立</span>
+      </div>
+      <div id="glyph-grid" class="glyph-grid"></div>
+    </div>
   </section>
 
-  <!-- 通用對話框 -->
+  <!-- 通用對話框（底部彈出） -->
   <div id="modal" class="modal" hidden>
     <div class="modal-backdrop"></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <span class="sheet-handle" aria-hidden="true"></span>
       <h3 id="modal-title"></h3>
       <div id="modal-body"></div>
       <div id="modal-actions" class="modal-actions"></div>
     </div>
   </div>
 
-  <div id="toast" class="toast" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

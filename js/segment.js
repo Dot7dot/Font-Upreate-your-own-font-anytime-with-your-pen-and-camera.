@@ -106,20 +106,27 @@ function median(arr) {
 
 function shouldMerge(a, b, refH) {
   const gap = refH * 0.06;
-  // 外框（加一點間距）有重疊
+  const unionH = Math.max(a.maxY, b.maxY) - Math.min(a.minY, b.minY) + 1;
+  const bothBig = bh(a) > refH * 0.55 && bh(b) > refH * 0.55;
+  // 合併後比一個字高很多 → 是上下排得很近的兩個字，不要合併
+  if (bothBig && unionH > refH * 1.4) return false;
+
   const overlapX = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
   const overlapY = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
+  // 外框（加一點間距）有重疊
   if (overlapX > -gap && overlapY > -gap) {
-    // 兩個都很大且只是邊緣擦到，就不要合併（避免把相鄰兩個字併在一起）
-    const minW = Math.min(bw(a), bw(b));
+    // 兩個都很大、左右並排：合起來仍只有一個字寬（例如橫線斷掉的 H）才合併，
+    // 否則是相鄰的兩個字
     const minH = Math.min(bh(a), bh(b));
-    const bigA = bh(a) > refH * 0.55 && bh(b) > refH * 0.55;
-    if (bigA && overlapX < minW * 0.35 && overlapY > minH * 0.5) return false;
+    if (bothBig && overlapY > minH * 0.5) {
+      const unionW = Math.max(a.maxX, b.maxX) - Math.min(a.minX, b.minX) + 1;
+      return unionW <= refH * 1.05;
+    }
     return true;
   }
-  // 上下堆疊的筆畫（水平方向大致重疊、垂直距離很近）
+  // 上下堆疊的筆畫（例如斷掉的筆畫）：水平大致重疊、垂直很近，且合起來仍是一個字的高度
   const smallerW = Math.min(bw(a), bw(b));
-  if (overlapX > smallerW * 0.6 && overlapY > -refH * 0.25) return true;
+  if (overlapX > smallerW * 0.6 && overlapY > -refH * 0.25 && unionH <= refH * 1.3) return true;
   return false;
 }
 

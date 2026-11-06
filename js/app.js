@@ -1,4 +1,4 @@
-import { listFolders, getFolder, saveFolder, deleteFolder, createFolder, uid } from './storage.js';
+import { listFolders, getFolder, saveFolder, deleteFolder, createFolder } from './storage.js';
 import { toWorkingCanvas, segmentCharacters } from './segment.js';
 import { loadModel, recognizeAll } from './recognizer.js';
 import { LETTERS, buildFont, fontToBlob } from './font.js';
@@ -190,9 +190,15 @@ async function openFolder(id) {
     return;
   }
   current = folder;
+  // 舊版會保留「未辨識的字」，現在改成拍完當下就處理完，不再保存
+  if (folder.pending && folder.pending.length) {
+    folder.pending = [];
+    saveFolder(folder);
+  }
   $('#view-home').hidden = true;
   $('#view-folder').hidden = false;
   window.scrollTo(0, 0);
+  $('#folder-scroll').scrollTop = 0;
   renderFolder();
   startCamera();
   // 先在背景載入辨識模型，拍照時就不用等
@@ -203,7 +209,11 @@ function renderFolder(flashLetters = []) {
   if (!current) return;
   $('#folder-name').textContent = current.name;
   const done = LETTERS.filter((L) => current.glyphs[L]).length;
-  $('#folder-progress').textContent = `已建立 ${done} / 26 個字母`;
+  $('#folder-progress').textContent = `${done} / 26`;
+  $('#progress-count').textContent = done;
+  $('#progress-fill').style.width = `${(done / 26) * 100}%`;
+  $('#progress-hint').textContent =
+    done === 26 ? '全部完成！可以輸出字型了' : `還差 ${26 - done} 個字母`;
 
   const grid = $('#glyph-grid');
   grid.innerHTML = '';
@@ -223,16 +233,6 @@ function renderFolder(flashLetters = []) {
     grid.append(cell);
   }
 
-  const pending = current.pending || [];
-  $('#pending-section').hidden = pending.length === 0;
-  $('#pending-count').textContent = `(${pending.length})`;
-  const plist = $('#pending-list');
-  plist.innerHTML = '';
-  for (const p of pending) {
-    plist.append(
-      el('button', { class: 'pending-item', onclick: () => pendingMenu(p) }, glyphImg(p.image, '未辨識'))
-    );
-  }
 }
 
 /** 點擊字母格 */
@@ -269,47 +269,6 @@ async function glyphMenu(L) {
   }
 }
 
-/** 點擊未辨識的片段 */
-async function pendingMenu(p) {
-  const picker = letterPickerEl();
-  const guesses = (p.top || []).slice(0, 3);
-  const body = el(
-    'div',
-    {},
-    el('div', { class: 'big-glyph', style: 'height:150px;margin-bottom:14px' }, glyphImg(p.image)),
-    guesses.length
-      ? el(
-          'div',
-          { class: 'guesses' },
-          el('p', {}, '辨識結果最可能是：'),
-          el(
-            'div',
-            { class: 'guess-row' },
-            guesses.map((L) =>
-              el('button', { class: 'btn guess', onclick: () => closeModal({ letter: L }) }, L)
-            )
-          )
-        )
-      : null,
-    el('p', {}, guesses.length ? '都不是的話，從這裡選：' : '這個字是哪個字母？'),
-    picker
-  );
-  const action = await showModal({
-    title: '指定字母',
-    body,
-    actions: [
-      { label: '丟掉這張', value: 'discard', class: 'btn-danger' },
-      { label: '取消', value: null },
-    ],
-  });
-  if (action === 'discard' || (action && action.letter)) {
-    current.pending = current.pending.filter((x) => x.id !== p.id);
-    if (action.letter) await assignWithConflict(action.letter, [p.image]);
-    await saveFolder(current);
-    renderFolder(action.letter ? [action.letter] : []);
-  }
-}
-
 function letterPickerEl(exclude) {
   const wrap = el('div', { class: 'letter-picker' });
   for (const L of LETTERS) {
@@ -328,27 +287,11 @@ function letterPickerEl(exclude) {
 async function pickLetter(title, exclude) {
   const r = await showModal({
     title,
-    body: el('div', {}, el('p', {}, '綠色代表該字母已經建立過。'), letterPickerEl(exclude)),
+    body: el('div', {}, el('p', {}, '有底色的代表該字母已經建立過。'), letterPickerEl(exclude)),
     actions: [{ label: '取消', value: null }],
   });
   return r && r.letter;
 }
-
-$('#btn-clear-pending').addEventListener('click', async () => {
-  const ok = await showModal({
-    title: '清除未辨識的字？',
-    body: '這些切割出來但沒有辨識成功的圖片都會被丟掉。',
-    actions: [
-      { label: '取消', value: false },
-      { label: '清除', value: true, class: 'btn-primary' },
-    ],
-  });
-  if (ok) {
-    current.pending = [];
-    await saveFolder(current);
-    renderFolder();
-  }
-});
 
 $('#btn-back').addEventListener('click', () => (location.hash = '#/'));
 
@@ -548,12 +491,23 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 
 async function applyResults(results) {
   const byLetter = new Map();
+  const push = (L, image) => {
+    if (!byLetter.has(L)) byLetter.set(L, []);
+    byLetter.get(L).push(image);
+  };
   const unknown = [];
   for (const r of results) {
-    if (!r.letter) unknown.push(r);
-    else {
-      if (!byLetter.has(r.letter)) byLetter.set(r.letter, []);
-      byLetter.get(r.letter).push(r.image);
+    if (r.letter) push(r.letter, r.image);
+    else unknown.push(r);
+  }
+
+  // 不太確定的字：當下請使用者決定去留，決定完就不再保存
+  let discarded = 0;
+  if (unknown.length) {
+    const decisions = await reviewUncertain(unknown);
+    for (const d of decisions) {
+      if (d.letter) push(d.letter, d.image);
+      else discarded++;
     }
   }
 
@@ -584,18 +538,57 @@ async function applyResults(results) {
     else if (changed) added.push(L);
   }
 
-  if (unknown.length) {
-    current.pending = (current.pending || []).concat(
-      unknown.map((r) => ({ id: uid(), image: r.image, top: r.top || [] }))
-    );
-  }
   await saveFolder(current);
   renderFolder(added);
 
   const parts = [];
   if (added.length) parts.push(`新增 / 更新了 ${added.length} 個字母：${added.join(' ')}`);
-  if (unknown.length) parts.push(`${unknown.length} 個字不太確定，請在下方點一下確認`);
+  if (discarded) parts.push(`丟掉 ${discarded} 個`);
   toast(parts.join('；') || '沒有新增任何字母', 4000);
+}
+
+/**
+ * 逐一確認不太確定的字：點最可能的字母、從 A–Z 選，或丟掉。
+ * @returns {Promise<{image:string, letter:string|null}[]>}
+ */
+async function reviewUncertain(items) {
+  const out = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const guesses = (it.top || []).slice(0, 3);
+    const body = el(
+      'div',
+      {},
+      el('p', {}, '這個字不太確定是哪個字母，請幫忙確認：'),
+      el('div', { class: 'big-glyph' }, glyphImg(it.image)),
+      guesses.length
+        ? el(
+            'div',
+            { class: 'guess-row' },
+            guesses.map((L, k) =>
+              el('button', { class: `btn guess${k === 0 ? ' btn-primary' : ''}`, onclick: () => closeModal({ letter: L }) }, L)
+            )
+          )
+        : null,
+      el('p', { class: 'small muted' }, '都不是的話，從這裡選：'),
+      letterPickerEl()
+    );
+    const r = await showModal({
+      title: `確認字母 ${i + 1} / ${items.length}`,
+      body,
+      actions: [
+        { label: '丟掉這個', value: 'discard', class: 'btn-danger' },
+        ...(items.length - i > 1 ? [{ label: `剩下 ${items.length - i} 個都丟掉`, value: 'discard-all' }] : []),
+      ],
+      dismissible: false,
+    });
+    if (r === 'discard-all') {
+      for (let j = i; j < items.length; j++) out.push({ image: items[j].image, letter: null });
+      break;
+    }
+    out.push({ image: it.image, letter: r && r.letter ? r.letter : null });
+  }
+  return out;
 }
 
 /**
@@ -659,6 +652,7 @@ $('#btn-export').addEventListener('click', async () => {
     return; // 不進行輸出
   }
   const btn = $('#btn-export');
+  const label = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = '產生中…';
   try {
@@ -682,7 +676,7 @@ $('#btn-export').addEventListener('click', async () => {
     toast('輸出失敗：' + (err.message || err), 4000);
   } finally {
     btn.disabled = false;
-    btn.textContent = '輸出字型';
+    btn.innerHTML = label;
   }
 });
 
@@ -717,7 +711,7 @@ $('#btn-preview').addEventListener('click', async () => {
     const face = new FontFace(family, font.toArrayBuffer());
     await face.load();
     document.fonts.add(face);
-    const box = el('div', { class: 'preview-box', style: `font-family:'${family}', var(--display)` });
+    const box = el('div', { class: 'preview-box', style: `font-family:'${family}', sans-serif` });
     const input = el('input', {
       type: 'text',
       class: 'preview-input',
@@ -742,6 +736,29 @@ $('#btn-preview').addEventListener('click', async () => {
     toast('預覽失敗：' + (err.message || err));
   }
 });
+
+/* =========================================================
+ * 主題色（橘黑 / 黃藍）：只是這台裝置的偏好，存在 localStorage
+ * ======================================================= */
+const THEMES = { orange: '#ff5b14', blue: '#1e40d8' };
+function applyTheme(name) {
+  if (!THEMES[name]) name = 'orange';
+  document.documentElement.dataset.theme = name;
+  document.querySelectorAll('[data-theme-option]').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.themeOption === name));
+  });
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#fff');
+}
+let savedTheme = 'orange';
+try { savedTheme = localStorage.getItem('fa-theme') || 'orange'; } catch (_) { /* 無痕模式 */ }
+applyTheme(savedTheme);
+document.querySelectorAll('[data-theme-option]').forEach((b) =>
+  b.addEventListener('click', () => {
+    applyTheme(b.dataset.themeOption);
+    try { localStorage.setItem('fa-theme', b.dataset.themeOption); } catch (_) { /* ignore */ }
+  })
+);
 
 /* ========================================================= */
 route();
