@@ -1,6 +1,6 @@
 import { listFolders, getFolder, saveFolder, deleteFolder, createFolder, uid } from './storage.js';
 import { toWorkingCanvas, segmentCharacters } from './segment.js';
-import { getWorker, recognizeAll } from './ocr.js';
+import { loadModel, recognizeAll } from './recognizer.js';
 import { LETTERS, buildFont, fontToBlob } from './font.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -195,8 +195,8 @@ async function openFolder(id) {
   window.scrollTo(0, 0);
   renderFolder();
   startCamera();
-  // 先在背景載入 OCR，拍照時就不用等太久
-  getWorker().catch(() => {});
+  // 先在背景載入辨識模型，拍照時就不用等
+  loadModel().catch(() => {});
 }
 
 function renderFolder(flashLetters = []) {
@@ -272,11 +272,26 @@ async function glyphMenu(L) {
 /** 點擊未辨識的片段 */
 async function pendingMenu(p) {
   const picker = letterPickerEl();
+  const guesses = (p.top || []).slice(0, 3);
   const body = el(
     'div',
     {},
     el('div', { class: 'big-glyph', style: 'height:150px;margin-bottom:14px' }, glyphImg(p.image)),
-    el('p', {}, '這個字是哪個字母？'),
+    guesses.length
+      ? el(
+          'div',
+          { class: 'guesses' },
+          el('p', {}, '辨識結果最可能是：'),
+          el(
+            'div',
+            { class: 'guess-row' },
+            guesses.map((L) =>
+              el('button', { class: 'btn guess', onclick: () => closeModal({ letter: L }) }, L)
+            )
+          )
+        )
+      : null,
+    el('p', {}, guesses.length ? '都不是的話，從這裡選：' : '這個字是哪個字母？'),
     picker
   );
   const action = await showModal({
@@ -480,16 +495,21 @@ async function processPhoto(work) {
     sctx.strokeStyle = 'rgba(255, 200, 0, 0.9)';
     for (const p of pieces) sctx.strokeRect(p.box.x, p.box.y, p.box.w, p.box.h);
 
-    await getWorker((t) => setStatus(t));
+    setStatus('正在載入手寫辨識模型…');
+    await loadModel();
     setStatus(`辨識中… 0 / ${pieces.length}`);
-    const letters = await recognizeAll(
+    const recognized = await recognizeAll(
       pieces.map((p) => p.raw),
       (done, total, i, letter) => {
-        setStatus(done < total ? `辨識中… ${done} / ${total}` : '再仔細看一次沒辨識出來的字…');
+        setStatus(`辨識中… ${done} / ${total}`);
         drawLabel(sctx, pieces[i].box, letter, lw);
       }
     );
-    const results = pieces.map((p, i) => ({ letter: letters[i], image: p.glyph.toDataURL('image/png') }));
+    const results = pieces.map((p, i) => ({
+      letter: recognized[i].letter,
+      top: recognized[i].top.map((t) => t.letter),
+      image: p.glyph.toDataURL('image/png'),
+    }));
     setStatus('');
 
     if (current !== folder) return; // 使用者已離開這個資料夾
@@ -530,7 +550,7 @@ async function applyResults(results) {
   const byLetter = new Map();
   const unknown = [];
   for (const r of results) {
-    if (!r.letter) unknown.push(r.image);
+    if (!r.letter) unknown.push(r);
     else {
       if (!byLetter.has(r.letter)) byLetter.set(r.letter, []);
       byLetter.get(r.letter).push(r.image);
@@ -565,14 +585,16 @@ async function applyResults(results) {
   }
 
   if (unknown.length) {
-    current.pending = (current.pending || []).concat(unknown.map((image) => ({ id: uid(), image })));
+    current.pending = (current.pending || []).concat(
+      unknown.map((r) => ({ id: uid(), image: r.image, top: r.top || [] }))
+    );
   }
   await saveFolder(current);
   renderFolder(added);
 
   const parts = [];
   if (added.length) parts.push(`新增 / 更新了 ${added.length} 個字母：${added.join(' ')}`);
-  if (unknown.length) parts.push(`${unknown.length} 個字沒辨識出來，可以在下方手動指定`);
+  if (unknown.length) parts.push(`${unknown.length} 個字不太確定，請在下方點一下確認`);
   toast(parts.join('；') || '沒有新增任何字母', 4000);
 }
 
