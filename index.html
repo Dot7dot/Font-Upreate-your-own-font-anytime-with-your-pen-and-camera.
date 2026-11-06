@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1b1a17" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Font Anytime：用手機拍下手寫的 A-Z，自動切割辨識，做成可以安裝使用的字型檔。" />
+  <title>Font Anytime</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23222'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23f6f1e7' font-family='Georgia,serif' font-style='italic'%3EAa%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- 首頁：資料夾列表 -->
+  <section id="view-home" class="view" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">Aa</span>
+        <div>
+          <h1>Font Anytime</h1>
+          <p class="tagline">用筆和相機，隨時做出自己的字型</p>
+        </div>
+      </div>
+    </header>
+    <main class="home-main">
+      <button id="btn-new-folder" class="btn btn-primary btn-block">＋ 新增資料夾</button>
+      <ul id="folder-list" class="folder-list"></ul>
+      <div id="home-empty" class="empty" hidden>
+        <p class="empty-title">還沒有任何資料夾</p>
+        <p>每個資料夾就是一套字型。建立一個資料夾，然後拍下你手寫的 A–Z 吧！</p>
+      </div>
+    </main>
+  </section>
+
+  <!-- 資料夾頁：上方相機、下方字母偵測狀態 -->
+  <section id="view-folder" class="view" hidden>
+    <header class="topbar topbar-folder">
+      <button id="btn-back" class="icon-btn" aria-label="返回">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="folder-title">
+        <h2 id="folder-name"></h2>
+        <p id="folder-progress" class="muted"></p>
+      </div>
+      <button id="btn-export" class="btn btn-primary btn-sm">輸出字型</button>
+    </header>
+
+    <div class="camera-wrap">
+      <div class="camera" id="camera">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="snapshot" hidden></canvas>
+        <div class="camera-guide" id="camera-guide">請在白紙上用深色筆寫<strong>大寫</strong>字母，字和字之間留一點空隙</div>
+        <div class="camera-msg" id="camera-msg" hidden></div>
+        <div class="camera-status" id="camera-status" hidden></div>
+      </div>
+      <div class="camera-actions">
+        <label class="btn btn-ghost btn-sm" for="file-input">從相簿選擇</label>
+        <input id="file-input" type="file" accept="image/*" hidden />
+        <button id="btn-shutter" class="shutter" aria-label="拍照"><span></span></button>
+        <button id="btn-preview" class="btn btn-ghost btn-sm">預覽字型</button>
+      </div>
+    </div>
+
+    <main class="folder-main">
+      <section id="pending-section" class="pending" hidden>
+        <div class="section-head">
+          <h3>未辨識的字 <span class="muted" id="pending-count"></span></h3>
+          <button id="btn-clear-pending" class="link-btn">全部清除</button>
+        </div>
+        <p class="muted small">點一下圖片，手動指定它是哪個字母</p>
+        <div id="pending-list" class="pending-list"></div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h3>字母偵測狀態</h3>
+          <span class="legend"><i class="dot dot-done"></i>已建立 <i class="dot dot-empty"></i>尚未建立</span>
+        </div>
+        <div id="glyph-grid" class="glyph-grid"></div>
+      </section>
+    </main>
+  </section>
+
+  <!-- 通用對話框 -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div id="modal-actions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+</body>
+</html>
